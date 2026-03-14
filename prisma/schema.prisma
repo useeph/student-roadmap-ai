@@ -1,0 +1,69 @@
+// Student Roadmap AI - Prisma Schema
+// PostgreSQL. For pgvector: enable extension in DB and add embedding column via raw SQL/migration.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model StudentProfile {
+  id             String   @id @default(cuid())
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  // Identity
+  name           String
+  age            Int?
+  gradeLevel     String?
+  graduationYear Int?
+  gpa            Float?
+
+  // Academics
+  currentClasses   String[] // Array of class names
+  intendedMajors   String[]
+  intendedIndustry String?
+  targetColleges   String[]
+
+  // Activities & Background
+  interests        String[]
+  extracurriculars String[]
+  awards           String[]
+  leadershipExp    String[]
+  githubUrl        String?
+  portfolioUrl     String?
+
+  // Capacity & Constraints
+  hoursPerWeek Float?
+  constraints  String? // Budget, location, etc.
+  goals        String?
+  testScores   Json? // { sat: number, act: number, apScores: [...] }
+
+  roadmap Roadmap?
+}
+
+model Roadmap {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now())
+  studentId String   @unique
+  student   StudentProfile @relation(fields: [studentId], references: [id], onDelete: Cascade)
+
+  studentSummary            String?  @db.Text
+  strengthsAnalysis         String?  @db.Text
+  gapsAnalysis               String?  @db.Text
+  recommendedExtracurriculars Json?
+  recommendedProjects        Json?
+  courseworkSuggestions     Json?
+  competitions              Json?
+  internshipsPrograms       Json?
+  timeline3Month            Json?
+  timeline6Month            Json?
+  timeline12Month           Json?
+  collegeCompetitiveness    Json?
+  topActions                  Json?
+  citations                   Json?
+  admissionsStrategyOptimizer Json? // Per-college ranked actions: AdmissionsStrategyResult[]
+}

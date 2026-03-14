@@ -1,0 +1,19 @@
+# Local PostgreSQL for Student Roadmap AI
+# Run: docker compose up -d
+# Then: cp .env.example .env and set DATABASE_URL=postgresql://postgres:postgres@localhost:5432/student_roadmap
+version: "3.8"
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: student-roadmap-db
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: student_roadmap
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+volumes:
+  postgres_data:

@@ -1,0 +1,2 @@
+# Student Roadmap AI - Intelligence Service
+# For MVP: stdlib only. Add openai, langchain, etc. when plugging in real LLM/RAG.
