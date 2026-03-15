@@ -1,0 +1,40 @@
+/**
+ * Award suggestions for searchable multi-select.
+ * Students can select from suggestions or add custom entries.
+ */
+
+export const AWARD_SUGGESTIONS: string[] = [
+  "Science Olympiad - Regional",
+  "Science Olympiad - State",
+  "Science Olympiad - National",
+  "USABO (Biology Olympiad)",
+  "USACO (Computer Science Olympiad)",
+  "AMC 8/10/12",
+  "AIME Qualifier",
+  "Hackathon - 1st Place",
+  "Hackathon - Top 5",
+  "Debate - Regional Champion",
+  "Model UN - Best Delegate",
+  "National Merit Semifinalist",
+  "AP Scholar",
+  "AP Scholar with Distinction",
+  "Presidential Volunteer Award",
+  "Principal's List",
+  "Honor Roll",
+  "Student of the Month",
+  "Writing Contest - Published",
+  "Art Exhibition - Featured",
+  "Music Competition - State",
+  "Sports - All-Conference",
+  "Sports - All-State",
+  "Sports - MVP",
+  "Eagle Scout / Gold Award",
+  "Science Fair - Regional",
+  "Science Fair - State",
+  "Science Fair - ISEF",
+  "Research Publication",
+  "Patent / Invention",
+  "Community Award",
+  "Leadership Award",
+  "Entrepreneurship Competition",
+];

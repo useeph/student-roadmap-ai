@@ -20,26 +20,25 @@ export async function GET(
       );
     }
 
+    const studentPayload = {
+      id: student.id,
+      name: student.name,
+      gradeLevel: student.gradeLevel,
+      graduationYear: student.graduationYear,
+      intendedMajors: student.intendedMajors,
+      targetColleges: student.targetColleges,
+    };
+
     if (!student.roadmap) {
       return NextResponse.json({
-        student: {
-          id: student.id,
-          name: student.name,
-          gradeLevel: student.gradeLevel,
-          graduationYear: student.graduationYear,
-        },
+        student: studentPayload,
         roadmap: null,
         hasRoadmap: false,
       });
     }
 
     return NextResponse.json({
-      student: {
-        id: student.id,
-        name: student.name,
-        gradeLevel: student.gradeLevel,
-        graduationYear: student.graduationYear,
-      },
+      student: studentPayload,
       roadmap: student.roadmap,
       hasRoadmap: true,
     });

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { ArrowLeft, Loader2 } from "lucide-react";
 import Link from "next/link";
@@ -10,8 +10,17 @@ import { Input } from "@/components/ui/Input";
 import { Label } from "@/components/ui/Label";
 import { Textarea } from "@/components/ui/Textarea";
 import { TagInput } from "@/components/TagInput";
+import { SearchableMultiSelect, type Option } from "@/components/SearchableMultiSelect";
+import { SearchableSingleSelect } from "@/components/SearchableSingleSelect";
+import { UniversitySelector } from "@/components/UniversitySelector";
 import { Disclaimer } from "@/components/Disclaimer";
 import type { StudentProfileInput } from "@/types";
+import { CLASS_OPTIONS } from "@/constants/classes";
+import { MAJOR_OPTIONS } from "@/constants/majors";
+import { INDUSTRY_OPTIONS } from "@/constants/industries";
+import { INTEREST_OPTIONS } from "@/constants/interests";
+import { EXTRACURRICULAR_OPTIONS } from "@/constants/extracurriculars";
+import { AWARD_SUGGESTIONS } from "@/constants/awards";
 
 export default function IntakePage() {
   const router = useRouter();
@@ -43,6 +52,31 @@ export default function IntakePage() {
     setForm((prev) => ({ ...prev, [k]: v }));
     setError(null);
   };
+
+  const classOptions: Option[] = useMemo(
+    () => CLASS_OPTIONS.map((c) => ({ value: c.value, label: c.label, group: c.category })),
+    []
+  );
+  const majorOptions: Option[] = useMemo(
+    () => MAJOR_OPTIONS.map((m) => ({ value: m, label: m })),
+    []
+  );
+  const industryOptions = useMemo(
+    () => INDUSTRY_OPTIONS.map((i) => ({ label: i, value: i })),
+    []
+  );
+  const interestOptions: Option[] = useMemo(
+    () => INTEREST_OPTIONS.map((i) => ({ value: i, label: i })),
+    []
+  );
+  const extracurricularOptions: Option[] = useMemo(
+    () => EXTRACURRICULAR_OPTIONS.map((e) => ({ value: e, label: e })),
+    []
+  );
+  const awardOptions: Option[] = useMemo(
+    () => AWARD_SUGGESTIONS.map((a) => ({ value: a, label: a })),
+    []
+  );
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -79,7 +113,7 @@ export default function IntakePage() {
 
   return (
     <div className="min-h-screen bg-slate-950">
-      <div className="container mx-auto px-4 py-8 max-w-3xl">
+      <div className="container mx-auto px-4 py-8 max-w-3xl sm:max-w-4xl">
         <Link
           href="/"
           className="inline-flex items-center gap-2 text-slate-400 hover:text-white mb-8 text-sm"
@@ -94,11 +128,13 @@ export default function IntakePage() {
         </p>
 
         <form onSubmit={handleSubmit} className="space-y-8">
-          <Card className="p-6 bg-slate-900/50 border-slate-800">
-            <h2 className="text-lg font-semibold text-white mb-4">Basics</h2>
+          <Card className="p-6 bg-slate-900/50 border-slate-800 rounded-xl">
+            <h2 className="text-lg font-semibold text-white mb-1">Basics</h2>
+            <p className="text-sm text-slate-500 mb-4">Core information about you</p>
             <div className="grid sm:grid-cols-2 gap-4">
               <div>
                 <Label htmlFor="name">Name or nickname *</Label>
+                <p className="text-xs text-slate-500 mb-1.5">How we&apos;ll address you</p>
                 <Input
                   id="name"
                   value={form.name ?? ""}
@@ -157,73 +193,84 @@ export default function IntakePage() {
           </Card>
 
           <Card className="p-6 bg-slate-900/50 border-slate-800">
-            <h2 className="text-lg font-semibold text-white mb-4">Academics</h2>
-            <div className="space-y-4">
-              <div>
-                <Label>Current classes</Label>
-                <TagInput
-                  value={form.currentClasses ?? []}
-                  onChange={(v) => update("currentClasses", v)}
-                  placeholder="Add class, e.g. AP Calculus"
-                />
-              </div>
-              <div>
-                <Label>Intended majors</Label>
-                <TagInput
-                  value={form.intendedMajors ?? []}
-                  onChange={(v) => update("intendedMajors", v)}
-                  placeholder="Add major, e.g. Computer Science"
-                />
-              </div>
-              <div>
-                <Label htmlFor="industry">Intended industry</Label>
-                <Input
-                  id="industry"
-                  value={form.intendedIndustry ?? ""}
-                  onChange={(e) => update("intendedIndustry", e.target.value)}
-                  placeholder="e.g. Technology, Medicine"
-                />
-              </div>
-              <div>
-                <Label>Target colleges</Label>
-                <TagInput
+            <h2 className="text-lg font-semibold text-white mb-6">Academics</h2>
+            <div className="space-y-6">
+              <SearchableMultiSelect
+                label="Current classes"
+                helperText="Search by category or add custom. Grouped by subject."
+                value={form.currentClasses ?? []}
+                onChange={(v) => update("currentClasses", v)}
+                options={classOptions}
+                placeholder="Search classes..."
+                maxSelections={20}
+                allowCustom
+              />
+              <SearchableMultiSelect
+                label="Intended majors"
+                helperText="Select one or more. Add custom if not listed."
+                value={form.intendedMajors ?? []}
+                onChange={(v) => update("intendedMajors", v)}
+                options={majorOptions}
+                placeholder="Search majors..."
+                maxSelections={5}
+                allowCustom
+              />
+              <SearchableSingleSelect
+                label="Intended industry"
+                helperText="Primary field you plan to work in."
+                value={form.intendedIndustry ?? ""}
+                onChange={(v) => update("intendedIndustry", v)}
+                options={industryOptions}
+                placeholder="Select industry..."
+                allowCustom
+              />
+              <div className="relative">
+                <UniversitySelector
+                  label="Target colleges"
+                  helperText="Search or pick from popular choices. Max 10."
                   value={form.targetColleges ?? []}
                   onChange={(v) => update("targetColleges", v)}
-                  placeholder="Add college name"
+                  maxSelections={10}
                 />
               </div>
             </div>
           </Card>
 
           <Card className="p-6 bg-slate-900/50 border-slate-800">
-            <h2 className="text-lg font-semibold text-white mb-4">Activities & achievements</h2>
-            <div className="space-y-4">
-              <div>
-                <Label>Interests</Label>
-                <TagInput
-                  value={form.interests ?? []}
-                  onChange={(v) => update("interests", v)}
-                  placeholder="e.g. Robotics, Debate"
-                />
-              </div>
-              <div>
-                <Label>Extracurriculars</Label>
-                <TagInput
-                  value={form.extracurriculars ?? []}
-                  onChange={(v) => update("extracurriculars", v)}
-                  placeholder="e.g. Math Club, Soccer"
-                />
-              </div>
-              <div>
-                <Label>Awards</Label>
-                <TagInput
-                  value={form.awards ?? []}
-                  onChange={(v) => update("awards", v)}
-                  placeholder="e.g. Science Olympiad regional"
-                />
-              </div>
+            <h2 className="text-lg font-semibold text-white mb-5">Activities & achievements</h2>
+            <div className="space-y-5">
+              <SearchableMultiSelect
+                value={form.interests ?? []}
+                onChange={(v) => update("interests", v)}
+                options={interestOptions}
+                label="Interests"
+                helperText="What topics excite you? Select from suggestions or add your own."
+                placeholder="Search interests..."
+                maxSelections={15}
+              />
+              <SearchableMultiSelect
+                value={form.extracurriculars ?? []}
+                onChange={(v) => update("extracurriculars", v)}
+                options={extracurricularOptions}
+                label="Extracurriculars"
+                helperText="Clubs, teams, and activities you're involved in."
+                placeholder="Search extracurriculars..."
+                maxSelections={15}
+              />
+              <SearchableMultiSelect
+                value={form.awards ?? []}
+                onChange={(v) => update("awards", v)}
+                options={awardOptions}
+                label="Awards"
+                helperText="Optional. Recognition from competitions, academics, or activities."
+                placeholder="Search awards..."
+                maxSelections={12}
+              />
               <div>
                 <Label>Leadership experience</Label>
+                <p className="text-xs text-slate-500 mb-1.5">
+                  Roles like club officer, team captain, project lead
+                </p>
                 <TagInput
                   value={form.leadershipExp ?? []}
                   onChange={(v) => update("leadershipExp", v)}

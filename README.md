@@ -18,7 +18,7 @@ A platform for middle school and high school students to get personalized academ
 - **Frontend**: Next.js 14, TypeScript, TailwindCSS, App Router
 - **Backend**: Next.js route handlers, Prisma ORM
 - **Database**: PostgreSQL (pgvector-compatible schema for future RAG/embeddings)
-- **Intelligence**: TypeScript mock analysis (Python service available for LLM integration)
+- **Intelligence**: OpenAI API for roadmap generation (falls back to deterministic mock when no API key)
 
 ## Getting Started
 
@@ -55,6 +55,29 @@ A platform for middle school and high school students to get personalized academ
    ```
 
 5. Open [http://localhost:3000](http://localhost:3000)
+
+### OpenAI Integration
+
+Roadmap generation uses the OpenAI API when configured.
+
+1. **Add your API key** to `.env`:
+
+   ```
+   OPENAI_API_KEY=sk-...
+   OPENAI_MODEL=gpt-4o-mini
+   ```
+
+2. **Model**: `OPENAI_MODEL` defaults to `gpt-4o-mini` (good balance of quality and cost). You can switch to `gpt-4o` for higher quality. The model must support `response_format: { type: "json_object" }`.
+
+3. **Prompt**: The system and user prompts live in `src/lib/ai/build-roadmap-prompt.ts`. Edit this file to adjust tone, constraints, or output structure.
+
+4. **Schema / Types**: The expected OpenAI response shape is defined in:
+   - `src/types/openai-roadmap.ts` (TypeScript interfaces)
+   - `src/lib/ai/validate-roadmap.ts` (Zod schema for server-side validation)
+
+5. **Demo mode**: When `OPENAI_API_KEY` is missing, the app uses deterministic mock data from `src/lib/ai/mock-roadmap.ts`. No crash, no API call—just a notice that demo data is being shown.
+
+6. **Modular design**: The OpenAI client is in `src/lib/ai/openai-client.ts`. To swap providers later, replace the `generateRoadmapWithOpenAI` implementation while keeping the same interface and types.
 
 ### Python Intelligence Service (Optional)
 
