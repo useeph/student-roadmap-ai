@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { ArrowLeft, Loader2 } from "lucide-react";
 import Link from "next/link";
@@ -47,6 +47,28 @@ export default function IntakePage() {
     goals: "",
     testScores: {},
   });
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch("/api/profile");
+        if (!res.ok || cancelled) return;
+        const data = await res.json();
+        if (data.profile && !cancelled) {
+          setForm((prev) => ({
+            ...prev,
+            ...data.profile,
+            testScores: data.profile.testScores ?? {},
+          }));
+        }
+      } catch {
+        /* ignore */
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const update = (k: keyof StudentProfileInput, v: unknown) => {
     setForm((prev) => ({ ...prev, [k]: v }));

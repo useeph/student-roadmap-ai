@@ -1,5 +1,8 @@
 import { NextResponse } from "next/server";
+import { Prisma } from "@prisma/client";
+import { auth } from "@/auth";
 import { prisma } from "@/lib/db";
+import { profileBelongsToUser } from "@/lib/auth-helpers";
 import { generateRoadmapWithOpenAI } from "@/lib/ai/openai-client";
 import { runAdmissionsStrategyOptimizer } from "@/lib/optimizer";
 import type { StudentProfileInput } from "@/types";
@@ -50,6 +53,11 @@ function profileFromStudent(student: {
 
 export async function POST(request: Request) {
   try {
+    const session = await auth();
+    if (!session?.user?.id) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
     const body = await request.json();
     const studentId = typeof body?.studentId === "string" ? body.studentId : null;
 
@@ -58,6 +66,11 @@ export async function POST(request: Request) {
         { error: "studentId is required" },
         { status: 400 }
       );
+    }
+
+    const allowed = await profileBelongsToUser(studentId, session.user.id);
+    if (!allowed) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
 
     const student = await prisma.studentProfile.findUnique({
@@ -79,48 +92,44 @@ export async function POST(request: Request) {
 
     const strengths = Array.isArray(openaiRoadmap.strengths) ? openaiRoadmap.strengths : [];
     const gaps = Array.isArray(openaiRoadmap.gaps) ? openaiRoadmap.gaps : [];
+    const extracurriculars = openaiRoadmap.extracurriculars ?? [];
+    const projects = openaiRoadmap.projects ?? [];
+    const collegeChances = openaiRoadmap.collegeChances ?? [];
+
     const roadmapData = {
-      studentSummary: openaiRoadmap.studentSummary ?? "",
+      studentSummary: openaiRoadmap.studentSummary ?? openaiRoadmap.strategy?.summary ?? "",
       strengthsAnalysis: strengths.join(" "),
       gapsAnalysis: gaps.join(" "),
-      recommendedExtracurriculars: openaiRoadmap.extracurricularRecommendations.map((r) => ({
+      recommendedExtracurriculars: extracurriculars.map((r) => ({
         name: r.title,
         reason: r.reason,
         priority: r.priority.toLowerCase() as "high" | "medium" | "low",
-      })) as object,
-      recommendedProjects: openaiRoadmap.projectIdeas.map((p) => ({
+      })),
+      recommendedProjects: projects.map((p) => ({
         name: p.title,
         reason: p.description,
         priority: "high" as const,
-      })) as object,
-      courseworkSuggestions: openaiRoadmap.courseworkSuggestions.map((c) => ({
-        name: c,
-        reason: "Strengthens academic profile.",
-        priority: "medium" as const,
-      })) as object,
-      competitions: openaiRoadmap.competitionSuggestions.map((c) => ({
-        name: c,
-        reason: "Adds recognition and credibility.",
-        priority: "high" as const,
-      })) as object,
-      internshipsPrograms: [] as object,
-      timeline3Month: openaiRoadmap.timeline.slice(0, 1).map((t) => ({
+      })),
+      courseworkSuggestions: [],
+      competitions: [],
+      internshipsPrograms: [],
+      timeline3Month: (openaiRoadmap.timeline ?? []).slice(0, 1).map((t) => ({
         month: t.period,
         actions: t.actions,
         focus: t.period,
-      })) as object,
-      timeline6Month: openaiRoadmap.timeline.slice(0, 2).map((t) => ({
+      })),
+      timeline6Month: (openaiRoadmap.timeline ?? []).slice(0, 2).map((t) => ({
         month: t.period,
         actions: t.actions,
         focus: t.period,
-      })) as object,
-      timeline12Month: openaiRoadmap.timeline.map((t) => ({
+      })),
+      timeline12Month: (openaiRoadmap.timeline ?? []).map((t) => ({
         month: t.period,
         actions: t.actions,
         focus: t.period,
-      })) as object,
+      })),
       collegeCompetitiveness: {
-        colleges: openaiRoadmap.competitivenessEstimates.map((c) => {
+        colleges: collegeChances.map((c) => {
           const tierMap: Record<string, "reach" | "target" | "safety" | "stretch"> = {
             "Extreme Reach": "stretch",
             Reach: "reach",
@@ -134,24 +143,55 @@ export async function POST(request: Request) {
             notes: c.explanation,
           };
         }),
-        summary: openaiRoadmap.finalAdvice,
-      } as object,
-      topActions: openaiRoadmap.improvementActions.flatMap((ia) =>
+        summary: openaiRoadmap.finalAdvice ?? openaiRoadmap.strategy?.summary ?? "",
+      },
+      topActions: (openaiRoadmap.improvementActions ?? []).flatMap((ia) =>
         ia.actions.map((a) => ({
           action: a.actionTitle,
           impact: a.explanation,
           priority: a.impactScore,
           timeframe: a.timeHorizon,
         }))
-      ).slice(0, 5) as object,
-      citations: [] as object,
-      admissionsStrategyOptimizer: JSON.parse(JSON.stringify(admissionsStrategyOptimizer)),
+      ).slice(0, 5),
+      citations: [],
+      admissionsStrategyOptimizer,
+      strategySection: openaiRoadmap.strategy ?? null,
+      essayIdeasSection: openaiRoadmap.essayIdeas?.length ? openaiRoadmap.essayIdeas : null,
+    };
+
+    // Sanitize all Json fields to avoid undefined/non-serializable values that break Prisma
+    const toJson = (v: unknown): Prisma.InputJsonValue =>
+      JSON.parse(JSON.stringify(v ?? null)) as Prisma.InputJsonValue;
+    const jsonNull = Prisma.JsonNull as unknown as Prisma.InputJsonValue;
+
+    const roadmapPayload = {
+      studentSummary: roadmapData.studentSummary,
+      strengthsAnalysis: roadmapData.strengthsAnalysis,
+      gapsAnalysis: roadmapData.gapsAnalysis,
+      recommendedExtracurriculars: toJson(roadmapData.recommendedExtracurriculars),
+      recommendedProjects: toJson(roadmapData.recommendedProjects),
+      courseworkSuggestions: toJson(roadmapData.courseworkSuggestions),
+      competitions: toJson(roadmapData.competitions),
+      internshipsPrograms: toJson(roadmapData.internshipsPrograms),
+      timeline3Month: toJson(roadmapData.timeline3Month),
+      timeline6Month: toJson(roadmapData.timeline6Month),
+      timeline12Month: toJson(roadmapData.timeline12Month),
+      collegeCompetitiveness: toJson(roadmapData.collegeCompetitiveness),
+      topActions: toJson(roadmapData.topActions),
+      citations: toJson(roadmapData.citations),
+      admissionsStrategyOptimizer: toJson(roadmapData.admissionsStrategyOptimizer),
+      strategySection: roadmapData.strategySection
+        ? toJson(roadmapData.strategySection)
+        : jsonNull,
+      essayIdeasSection: roadmapData.essayIdeasSection
+        ? toJson(roadmapData.essayIdeasSection)
+        : jsonNull,
     };
 
     await prisma.roadmap.upsert({
       where: { studentId },
-      create: { studentId, ...roadmapData },
-      update: roadmapData,
+      create: { studentId, ...roadmapPayload },
+      update: roadmapPayload,
     });
 
     return NextResponse.json({

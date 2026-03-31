@@ -18,6 +18,8 @@ export interface ChatContainerProps {
   inputDisabled?: boolean;
   disclaimer?: React.ReactNode;
   className?: string;
+  /** Ref forwarded to the scroll container for section tabs scroll detection */
+  scrollContainerRef?: React.RefObject<HTMLDivElement | null>;
 }
 
 export function ChatContainer({
@@ -30,8 +32,16 @@ export function ChatContainer({
   inputDisabled = false,
   disclaimer,
   className,
+  scrollContainerRef,
 }: ChatContainerProps) {
   const scrollRef = useRef<HTMLDivElement>(null);
+
+  const setRef = (el: HTMLDivElement | null) => {
+    (scrollRef as React.MutableRefObject<HTMLDivElement | null>).current = el;
+    if (scrollContainerRef) {
+      (scrollContainerRef as React.MutableRefObject<HTMLDivElement | null>).current = el;
+    }
+  };
 
   useEffect(() => {
     const el = scrollRef.current;
@@ -48,16 +58,22 @@ export function ChatContainer({
     >
       {/* Scrollable messages area */}
       <div
-        ref={scrollRef}
+        ref={setRef}
         className="flex-1 overflow-y-auto overflow-x-hidden p-4 space-y-6 scroll-smooth"
       >
         {messages.map((msg, i) => (
-          <ChatMessage
+          <div
             key={msg.id ?? i}
-            role={msg.role}
-            content={msg.content}
-            collegesMentioned={msg.collegesMentioned}
-          />
+            id={msg.section ? `section-${msg.section}` : undefined}
+            data-section={msg.section}
+            className={msg.section ? "scroll-mt-4" : undefined}
+          >
+            <ChatMessage
+              role={msg.role}
+              content={msg.content}
+              collegesMentioned={msg.collegesMentioned}
+            />
+          </div>
         ))}
         {isLoading && <TypingIndicator />}
       </div>

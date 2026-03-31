@@ -1,27 +1,36 @@
 /**
  * Server-side validation of OpenAI roadmap response.
- * Ensures parsed JSON matches expected schema before use.
+ * Validates the structured schema and normalizes to OpenAIRoadmapResponse.
  */
 
 import { z } from "zod";
 import type { OpenAIRoadmapResponse } from "@/types/openai-roadmap";
 
+const strategyTopPrioritySchema = z.object({
+  title: z.string(),
+  reason: z.string(),
+  impact: z.enum(["High", "Medium", "Low"]),
+});
+
+const strategySchema = z.object({
+  summary: z.string(),
+  topPriorities: z.array(strategyTopPrioritySchema),
+});
+
+const projectSchema = z.object({
+  title: z.string(),
+  description: z.string(),
+  technologies: z.array(z.string()),
+  timeEstimate: z.string(),
+  difficulty: z.enum(["Beginner", "Intermediate", "Advanced"]),
+  whyItStandsOut: z.string(),
+});
+
 const extracurricularSchema = z.object({
   title: z.string(),
   reason: z.string(),
+  howToStandOut: z.string(),
   priority: z.enum(["High", "Medium", "Low"]),
-});
-
-const projectIdeaSchema = z.object({
-  title: z.string(),
-  description: z.string(),
-  timeEstimate: z.string(),
-  difficulty: z.enum(["Beginner", "Intermediate", "Advanced"]),
-});
-
-const timelinePeriodSchema = z.object({
-  period: z.string(),
-  actions: z.array(z.string()),
 });
 
 const competitivenessSchema = z.object({
@@ -31,6 +40,19 @@ const competitivenessSchema = z.object({
   probabilityBandLow: z.number().min(0).max(100),
   probabilityBandHigh: z.number().min(0).max(100),
   explanation: z.string(),
+  biggestImprovementNeeded: z.string(),
+});
+
+const essayIdeaSchema = z.object({
+  theme: z.string(),
+  storyOutline: z.string(),
+  whatItReveals: z.string(),
+  whyItIsCompelling: z.string(),
+});
+
+const timelinePeriodSchema = z.object({
+  period: z.string(),
+  actions: z.array(z.string()),
 });
 
 const improvementActionItemSchema = z.object({
@@ -46,16 +68,16 @@ const improvementActionSchema = z.object({
   actions: z.array(improvementActionItemSchema),
 });
 
-const openAIRoadmapSchema = z.object({
+const roadmapSchema = z.object({
   studentSummary: z.string(),
   strengths: z.array(z.string()),
   gaps: z.array(z.string()),
-  extracurricularRecommendations: z.array(extracurricularSchema),
-  projectIdeas: z.array(projectIdeaSchema),
-  courseworkSuggestions: z.array(z.string()),
-  competitionSuggestions: z.array(z.string()),
+  strategy: strategySchema,
+  projects: z.array(projectSchema),
+  extracurriculars: z.array(extracurricularSchema),
+  collegeChances: z.array(competitivenessSchema),
+  essayIdeas: z.array(essayIdeaSchema),
   timeline: z.array(timelinePeriodSchema),
-  competitivenessEstimates: z.array(competitivenessSchema),
   improvementActions: z.array(improvementActionSchema),
   finalAdvice: z.string(),
 });
@@ -63,7 +85,7 @@ const openAIRoadmapSchema = z.object({
 export function validateOpenAIRoadmapResponse(
   parsed: unknown
 ): OpenAIRoadmapResponse | null {
-  const result = openAIRoadmapSchema.safeParse(parsed);
+  const result = roadmapSchema.safeParse(parsed);
   if (result.success) {
     return result.data as OpenAIRoadmapResponse;
   }

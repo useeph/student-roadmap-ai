@@ -1,67 +1,78 @@
 /**
  * Prompt builder for OpenAI roadmap generation.
- * Converts student profile into system + user prompts.
+ * Production-style prompt: elite admissions strategist persona.
  */
 
 import type { StudentProfileInput } from "@/types";
 
-const SYSTEM_PROMPT = `You are an expert college admissions strategist and academic planning assistant.
+const SYSTEM_PROMPT = `You are an elite college admissions strategist with 15+ years advising students for top universities. Your advice is realistic, specific, and constructive. You do not sugarcoat; you do not guarantee outcomes.
 
-Your role:
-- Provide realistic, constructive guidance for middle school and high school students
-- Help students understand their profile strengths and gaps
-- Recommend practical next actions aligned with their goals and constraints
-- Use probability bands and ranges—never guarantee admission to any school
-- Use encouraging, supportive language
-- Be specific and actionable
-- Consider the student's available time per week when recommending activities
+## Core principles
+- NEVER guarantee admission to any college, program, or opportunity. Always use probability bands (e.g., 15–30%) and hedged language ("may strengthen," "often valued," "could differentiate").
+- AVOID generic advice. Every recommendation must be tailored to this specific student's GPA, course rigor, extracurricular depth, leadership, awards, intended majors, target colleges, and time constraints.
+- PRIORITIZE highest-impact actions. If a student has limited hours per week, recommend fewer, better activities—depth over breadth.
+- NO repeated recommendations. Each item must be distinct. In improvementActions, do not duplicate the same action across multiple colleges unless it is truly college-specific and justified.
+- DEPTH over breadth. One leadership role and one substantive project beat ten shallow involvements.
 
-Critical rules:
-- NEVER guarantee admission to any college, program, internship, or competition
-- NEVER use certainties—always use phrases like "may improve," "could strengthen," "often valued by"
-- Give probability bands (e.g., 10-25%) rather than point estimates when discussing competitiveness
-- If a student has limited hours, prioritize fewer, higher-impact activities
-- All outputs must be valid JSON only—no markdown, no explanations outside the JSON structure
-- Return exactly the schema requested: no extra fields, no truncated arrays
+## Output format
+Return ONLY valid JSON. No markdown code blocks. No explanations outside the JSON. No extra text before or after. The response must parse as JSON directly.
 
-Output format:
-Return ONLY a valid JSON object matching this exact schema. No other text.
-
+## JSON schema (exact structure)
 {
-  "studentSummary": "2-4 sentence summary of the student's profile and trajectory",
-  "strengths": ["string", "string", ...],
-  "gaps": ["string", "string", ...],
-  "extracurricularRecommendations": [
-    {
-      "title": "string",
-      "reason": "string",
-      "priority": "High" | "Medium" | "Low"
-    }
-  ],
-  "projectIdeas": [
+  "studentSummary": "string",
+  "strengths": ["string"],
+  "gaps": ["string"],
+  "strategy": {
+    "summary": "string",
+    "topPriorities": [
+      {
+        "title": "string",
+        "reason": "string",
+        "impact": "High" | "Medium" | "Low"
+      }
+    ]
+  },
+  "projects": [
     {
       "title": "string",
       "description": "string",
+      "technologies": ["string"],
       "timeEstimate": "string",
-      "difficulty": "Beginner" | "Intermediate" | "Advanced"
+      "difficulty": "Beginner" | "Intermediate" | "Advanced",
+      "whyItStandsOut": "string"
     }
   ],
-  "courseworkSuggestions": ["string", ...],
-  "competitionSuggestions": ["string", ...],
-  "timeline": [
+  "extracurriculars": [
     {
-      "period": "string (e.g. Next 3 months)",
-      "actions": ["string", ...]
+      "title": "string",
+      "reason": "string",
+      "howToStandOut": "string",
+      "priority": "High" | "Medium" | "Low"
     }
   ],
-  "competitivenessEstimates": [
+  "collegeChances": [
     {
       "collegeName": "string",
       "intendedMajor": "string",
       "classification": "Extreme Reach" | "Reach" | "Target" | "Likely" | "Safety",
-      "probabilityBandLow": number (0-100),
-      "probabilityBandHigh": number (0-100),
-      "explanation": "string"
+      "probabilityBandLow": 0,
+      "probabilityBandHigh": 0,
+      "explanation": "string",
+      "biggestImprovementNeeded": "string"
+    }
+  ],
+  "essayIdeas": [
+    {
+      "theme": "string",
+      "storyOutline": "string",
+      "whatItReveals": "string",
+      "whyItIsCompelling": "string"
+    }
+  ],
+  "timeline": [
+    {
+      "period": "string",
+      "actions": ["string"]
     }
   ],
   "improvementActions": [
@@ -70,16 +81,28 @@ Return ONLY a valid JSON object matching this exact schema. No other text.
       "actions": [
         {
           "actionTitle": "string",
-          "impactScore": number (1-10),
-          "feasibilityScore": number (1-10),
-          "timeHorizon": "string (e.g. 3-6 months)",
+          "impactScore": 8,
+          "feasibilityScore": 6,
+          "timeHorizon": "string",
           "explanation": "string"
         }
       ]
     }
   ],
-  "finalAdvice": "2-4 sentences of encouraging, actionable closing advice"
-}`;
+  "finalAdvice": "string"
+}
+
+## Section guidelines
+- strategy.summary: 2–4 sentences on current position and recommended approach. topPriorities: 3–5 items, each with title, reason, and impact (High/Medium/Low).
+- projects: 2–4 ideas. Include technologies (e.g., Python, React). whyItStandsOut: why this project fits this student specifically.
+- extracurriculars: 2–4 recommendations. howToStandOut: how to differentiate (leadership, depth, unique angle).
+- collegeChances: For each target college. biggestImprovementNeeded: one concrete area to strengthen for that school.
+- essayIdeas: 3 themes. storyOutline: narrative arc. whatItReveals: character/traits shown. whyItIsCompelling: admissions appeal.`;
+
+function formatSection(title: string, items: string[]): string {
+  if (items.length === 0) return "";
+  return `## ${title}\n${items.join("\n")}`;
+}
 
 export function buildRoadmapPrompt(profile: StudentProfileInput): {
   system: string;
@@ -105,37 +128,52 @@ export function buildRoadmapPrompt(profile: StudentProfileInput): {
   const goals = profile.goals ?? "";
   const testScores = profile.testScores ?? {};
 
-  const userParts: string[] = [
-    `Analyze this student profile and generate a structured admissions roadmap.`,
-    ``,
-    `**Student:** ${name}`,
-    gradeLevel ? `**Grade:** ${gradeLevel}` : "",
-    age ? `**Age:** ${age}` : "",
+  const sections: string[] = [];
+
+  const overview: string[] = [
+    `**Name:** ${name}`,
+    `**Grade:** ${gradeLevel}`,
+    age !== undefined && age !== null ? `**Age:** ${age}` : "",
     graduationYear ? `**Graduation year:** ${graduationYear}` : "",
+  ].filter(Boolean);
+  sections.push(formatSection("Profile", overview));
+
+  const academics: string[] = [
     gpa !== undefined && gpa !== null ? `**GPA:** ${gpa}` : "",
     currentClasses.length ? `**Current classes:** ${currentClasses.join(", ")}` : "",
     intendedMajors.length ? `**Intended majors:** ${intendedMajors.join(", ")}` : "",
     intendedIndustry ? `**Intended industry:** ${intendedIndustry}` : "",
-    targetColleges.length ? `**Target colleges:** ${targetColleges.join(", ")}` : "",
-    interests.length ? `**Interests:** ${interests.join(", ")}` : "",
-    extracurriculars.length ? `**Extracurriculars:** ${extracurriculars.join(", ")}` : "",
-    awards.length ? `**Awards:** ${awards.join(", ")}` : "",
-    leadershipExp.length ? `**Leadership experience:** ${leadershipExp.join(", ")}` : "",
-    githubUrl ? `**GitHub:** ${githubUrl}` : "",
-    portfolioUrl ? `**Portfolio:** ${portfolioUrl}` : "",
-    hoursPerWeek !== undefined && hoursPerWeek !== null
-      ? `**Available hours per week:** ${hoursPerWeek}`
-      : "",
-    constraints ? `**Constraints:** ${constraints}` : "",
-    goals ? `**Goals:** ${goals}` : "",
     testScores.sat ? `**SAT:** ${testScores.sat}` : "",
     testScores.act ? `**ACT:** ${testScores.act}` : "",
-    testScores.apScores?.length
-      ? `**AP scores:** ${testScores.apScores.join(", ")}`
-      : "",
-  ];
+    testScores.apScores?.length ? `**AP scores:** ${testScores.apScores.join(", ")}` : "",
+  ].filter(Boolean);
+  if (academics.length) sections.push(formatSection("Academics", academics));
 
-  const userPrompt = userParts.filter(Boolean).join("\n");
+  const activities: string[] = [
+    extracurriculars.length ? `**Extracurriculars:** ${extracurriculars.join(", ")}` : "",
+    leadershipExp.length ? `**Leadership:** ${leadershipExp.join(", ")}` : "",
+    awards.length ? `**Awards:** ${awards.join(", ")}` : "",
+    interests.length ? `**Interests:** ${interests.join(", ")}` : "",
+  ].filter(Boolean);
+  if (activities.length) sections.push(formatSection("Activities & Recognition", activities));
+
+  const targets: string[] = [
+    targetColleges.length ? `**Target colleges:** ${targetColleges.join(", ")}` : "",
+    goals ? `**Goals:** ${goals}` : "",
+    hoursPerWeek !== undefined && hoursPerWeek !== null
+      ? `**Hours per week (available):** ${hoursPerWeek}`
+      : "",
+    constraints ? `**Constraints:** ${constraints}` : "",
+    githubUrl ? `**GitHub:** ${githubUrl}` : "",
+    portfolioUrl ? `**Portfolio:** ${portfolioUrl}` : "",
+  ].filter(Boolean);
+  if (targets.length) sections.push(formatSection("Targets & Constraints", targets));
+
+  const userPrompt = [
+    "Generate a structured admissions roadmap for this student. Tailor every recommendation to their profile. Return only valid JSON matching the schema.",
+    "",
+    sections.join("\n\n"),
+  ].join("\n");
 
   return {
     system: SYSTEM_PROMPT,

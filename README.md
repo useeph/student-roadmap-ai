@@ -4,6 +4,7 @@ A platform for middle school and high school students to get personalized academ
 
 ## Features
 
+- **Accounts**: Email/password sign-up and sign-in (NextAuth.js / Auth.js, JWT sessions, bcrypt password hashing)
 - **Student profile intake**: Name, age, grade, GPA, classes, interests, intended majors, target colleges, extracurriculars, awards, leadership, and more
 - **AI-generated analysis**: Student summary, strengths, gaps, recommended activities, projects, coursework, competitions, internships
 - **Timelines**: 3-month, 6-month, and 12-month action plans
@@ -15,10 +16,27 @@ A platform for middle school and high school students to get personalized academ
 
 ## Tech Stack
 
-- **Frontend**: Next.js 14, TypeScript, TailwindCSS, App Router
+- **Frontend**: Next.js (App Router), TypeScript, TailwindCSS
 - **Backend**: Next.js route handlers, Prisma ORM
+- **Auth**: NextAuth.js v5 (credentials provider), JWT sessions
 - **Database**: PostgreSQL (pgvector-compatible schema for future RAG/embeddings)
 - **Intelligence**: OpenAI API for roadmap generation (falls back to deterministic mock when no API key)
+
+## Environment variables
+
+Copy `.env.example` to `.env` and configure:
+
+| Variable | Required | Description |
+|----------|----------|-------------|
+| `DATABASE_URL` | Yes | PostgreSQL connection string |
+| `AUTH_SECRET` | Yes (production) | Secret for signing sessions. Generate: `openssl rand -base64 32` |
+| `AUTH_URL` | Production | Public app URL, e.g. `https://yourdomain.com` |
+| `OPENAI_API_KEY` | No | If omitted, roadmap uses deterministic mock data |
+| `OPENAI_MODEL` | No | Defaults to `gpt-4o-mini` |
+| `ADMIN_BOOTSTRAP_EMAIL` | No | Used only by `npx prisma db seed` to create/update an admin |
+| `ADMIN_BOOTSTRAP_PASSWORD` | No | Password for the seeded admin user |
+
+Legacy aliases `NEXTAUTH_SECRET` / `NEXTAUTH_URL` still work with NextAuth.
 
 ## Getting Started
 
@@ -26,7 +44,6 @@ A platform for middle school and high school students to get personalized academ
 
 - Node.js 18+
 - PostgreSQL
-- (Optional) Python 3.9+ for the Python intelligence service
 
 ### Setup
 
@@ -36,48 +53,72 @@ A platform for middle school and high school students to get personalized academ
    npm install
    ```
 
-2. Copy `.env.example` to `.env` and set your `DATABASE_URL`:
+2. Copy `.env.example` to `.env` and set `DATABASE_URL` and `AUTH_SECRET`.
+
+3. Apply database schema and generate Prisma Client:
 
    ```bash
-   cp .env.example .env
+   npx prisma migrate dev
+   npx prisma generate
    ```
 
-3. Run Prisma migrations:
+   If you use an existing database, run migrations with `npx prisma migrate deploy` in production.
+
+4. (Optional) Create or update an **admin** user via seed:
 
    ```bash
-   npx prisma migrate dev --name init
+   # In .env
+   ADMIN_BOOTSTRAP_EMAIL=you@example.com
+   ADMIN_BOOTSTRAP_PASSWORD=your-secure-password
+
+   npx prisma db seed
    ```
 
-4. Start the dev server:
+   Or promote a user manually in SQL:
+
+   ```sql
+   UPDATE "User" SET role = 'ADMIN' WHERE email = 'you@example.com';
+   ```
+
+5. Start the dev server:
 
    ```bash
    npm run dev
    ```
 
-5. Open [http://localhost:3000](http://localhost:3000)
+6. Open [http://localhost:3000](http://localhost:3000)
+
+### Authentication
+
+- **Sign up**: `/signup` — creates a `User` (password hashed with bcrypt) and an empty `StudentProfile` linked to that user.
+- **Sign in**: `/login` — email/password; invalid credentials show a generic error message.
+- **Sign out**: Available from the home header (when logged in), dashboard, and admin pages.
+- **Protected routes** (middleware): `/intake`, `/dashboard`, `/roadmap/*` require login. `/admin/*` requires role `ADMIN`.
+- **Data scoping**: Student profiles and roadmaps are tied to `User` via `StudentProfile.userId`. API routes verify ownership before returning or mutating data.
+
+### Creating a roadmap (logged-in flow)
+
+1. Sign up or log in.
+2. Open **Dashboard** → **Start intake** (or go to `/intake`).
+3. Complete the profile form and submit — it updates **your** profile (same `StudentProfile` id as in the database).
+4. You are redirected to `/roadmap/[profileId]`; analysis runs if needed.
 
 ### OpenAI Integration
 
 Roadmap generation uses the OpenAI API when configured.
 
-1. **Add your API key** to `.env`:
+1. Add your API key to `.env`:
 
    ```
    OPENAI_API_KEY=sk-...
    OPENAI_MODEL=gpt-4o-mini
    ```
 
-2. **Model**: `OPENAI_MODEL` defaults to `gpt-4o-mini` (good balance of quality and cost). You can switch to `gpt-4o` for higher quality. The model must support `response_format: { type: "json_object" }`.
+2. **Prompt**: `src/lib/ai/build-roadmap-prompt.ts`
 
-3. **Prompt**: The system and user prompts live in `src/lib/ai/build-roadmap-prompt.ts`. Edit this file to adjust tone, constraints, or output structure.
+3. **Schema / Types**: `src/types/openai-roadmap.ts`, `src/lib/ai/validate-roadmap.ts`
 
-4. **Schema / Types**: The expected OpenAI response shape is defined in:
-   - `src/types/openai-roadmap.ts` (TypeScript interfaces)
-   - `src/lib/ai/validate-roadmap.ts` (Zod schema for server-side validation)
-
-5. **Demo mode**: When `OPENAI_API_KEY` is missing, the app uses deterministic mock data from `src/lib/ai/mock-roadmap.ts`. No crash, no API call—just a notice that demo data is being shown.
-
-6. **Modular design**: The OpenAI client is in `src/lib/ai/openai-client.ts`. To swap providers later, replace the `generateRoadmapWithOpenAI` implementation while keeping the same interface and types.
+4. **Demo mode**: Without `OPENAI_API_KEY`, the app uses `src/lib/ai/mock-roadmap.ts`.
 
 ### Python Intelligence Service (Optional)
 
@@ -86,37 +127,51 @@ For LLM or retrieval-based analysis, use the Python service:
 ```bash
 cd python
 pip install -r requirements.txt
-# Run via stdin/stdout: echo '{"name":"Alex",...}' | python -m intelligence.analyze
 ```
 
-The Next.js analysis currently uses the in-process TypeScript `runAnalysis` in `src/lib/analysis.ts`. To plug in the Python service, call it from `runAnalysis` via `child_process.spawn` and parse JSON from stdout.
+The Next.js app primarily uses in-process TypeScript analysis and OpenAI.
 
-### Database
+### Database notes
 
-PostgreSQL schema is pgvector-ready. To enable vector extensions for future RAG:
+- **Legacy data**: If you had `StudentProfile` rows before auth, they may have `userId = null`. Those rows are not accessible through the new authenticated API until you attach them to a `User` (manual SQL or a one-off migration).
+
+### PostgreSQL / pgvector (optional)
 
 ```sql
 CREATE EXTENSION IF NOT EXISTS vector;
 ```
 
+### Troubleshooting: `P1001 Can't reach database server`
+
+Prisma could not open a TCP connection to Postgres. Common causes:
+
+1. **Wrong `DATABASE_URL`** — Copy the URI from your host’s dashboard (Neon, Supabase, etc.). For **Neon**, use the string they provide and ensure it includes **`?sslmode=require`** (or `sslmode=no-verify` only if their docs say so).
+2. **Neon project asleep** — Free-tier databases suspend after inactivity. Open the [Neon console](https://console.neon.tech), select your project, and wake it (or run a query). Retry `npx prisma migrate dev` after the DB is active.
+3. **Network / firewall / VPN** — Corporate networks sometimes block outbound port `5432`. Try another network, disable VPN, or use Neon's **pooler** vs **direct** connection if one works and the other does not.
+4. **Env not loaded** — Confirm `.env` is in the project root and `DATABASE_URL` has no typos or smart quotes. Restart the terminal after editing.
+
+Quick test (requires `psql` or Neon SQL editor): connect with the same URL Prisma uses.
+
+5. **Neon branch deleted or project removed** — If the project was deleted or the branch ID changed, the hostname (`ep-wild-bonus-...`) no longer resolves. Create a new Neon project and replace `DATABASE_URL` with the new connection string from the dashboard.
+
 ## Project Structure
 
 ```
 ├── prisma/
-│   └── schema.prisma       # StudentProfile, Roadmap models
-├── python/
-│   ├── intelligence/
-│   │   └── analyze.py      # Python analysis service (mock/LLM-ready)
-│   └── requirements.txt
+│   ├── schema.prisma       # User, StudentProfile, Roadmap
+│   ├── migrations/
+│   └── seed.mjs            # Optional admin bootstrap
 ├── src/
+│   ├── auth.ts             # NextAuth configuration
+│   ├── middleware.ts       # Route protection
 │   ├── app/
-│   │   ├── api/            # profile, analyze, roadmap routes
-│   │   ├── intake/         # Profile form page
-│   │   ├── roadmap/[id]/   # Roadmap results page
-│   │   └── page.tsx        # Landing page
-│   ├── components/         # UI components
-│   ├── lib/                # db, utils, analysis
-│   └── types/              # Shared types
+│   │   ├── api/auth/       # NextAuth + register
+│   │   ├── login/, signup/
+│   │   ├── dashboard/
+│   │   ├── admin/
+│   │   ├── intake/
+│   │   └── roadmap/[id]/
+│   └── components/
 └── package.json
 ```
 

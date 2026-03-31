@@ -5,26 +5,14 @@ import { ArrowRight, GraduationCap, Sparkles, Target } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
 import { Disclaimer } from "@/components/Disclaimer";
+import { SiteHeader } from "@/components/layout/SiteHeader";
 
 export default function Home() {
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-950 via-indigo-950/30 to-slate-950">
       <div className="absolute inset-0 bg-[radial-gradient(ellipse_80%_80%_at_50%_-20%,rgba(99,102,241,0.15),transparent)]" />
       <div className="relative container mx-auto px-4 py-16 md:py-24">
-        <header className="flex items-center justify-between mb-16">
-          <div className="flex items-center gap-2">
-            <GraduationCap className="h-8 w-8 text-indigo-400" />
-            <span className="text-xl font-bold text-white">Student Roadmap AI</span>
-          </div>
-          <nav className="flex gap-4">
-            <Link
-              href="/intake"
-              className="text-slate-400 hover:text-white transition-colors text-sm font-medium"
-            >
-              Get Started
-            </Link>
-          </nav>
-        </header>
+        <SiteHeader />
 
         <main className="max-w-4xl mx-auto text-center">
           <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-indigo-500/10 border border-indigo-500/20 text-indigo-300 text-sm mb-8">
@@ -44,10 +32,15 @@ export default function Home() {
           </p>
 
           <div className="flex flex-col sm:flex-row gap-4 justify-center mb-20">
-            <Link href="/intake">
+            <Link href="/signup">
               <Button size="lg" className="gap-2">
                 Create your roadmap
                 <ArrowRight className="h-5 w-5" />
+              </Button>
+            </Link>
+            <Link href="/login">
+              <Button size="lg" variant="outline" className="gap-2">
+                Sign in
               </Button>
             </Link>
           </div>

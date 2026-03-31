@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { auth } from "@/auth";
 import { prisma } from "@/lib/db";
 import { z } from "zod";
 
@@ -30,34 +31,95 @@ const profileSchema = z.object({
     .optional(),
 });
 
+/** GET current user's student profile (id + fields for intake prefill) */
+export async function GET() {
+  const session = await auth();
+  if (!session?.user?.id) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  const profile = await prisma.studentProfile.findUnique({
+    where: { userId: session.user.id },
+  });
+
+  if (!profile) {
+    return NextResponse.json({ profile: null });
+  }
+
+  return NextResponse.json({
+    id: profile.id,
+    profile: {
+      name: profile.name,
+      age: profile.age ?? undefined,
+      gradeLevel: profile.gradeLevel ?? undefined,
+      graduationYear: profile.graduationYear ?? undefined,
+      gpa: profile.gpa ?? undefined,
+      currentClasses: profile.currentClasses,
+      intendedMajors: profile.intendedMajors,
+      intendedIndustry: profile.intendedIndustry ?? undefined,
+      targetColleges: profile.targetColleges,
+      interests: profile.interests,
+      extracurriculars: profile.extracurriculars,
+      awards: profile.awards,
+      leadershipExp: profile.leadershipExp,
+      githubUrl: profile.githubUrl ?? undefined,
+      portfolioUrl: profile.portfolioUrl ?? undefined,
+      hoursPerWeek: profile.hoursPerWeek ?? undefined,
+      constraints: profile.constraints ?? undefined,
+      goals: profile.goals ?? undefined,
+      testScores: (profile.testScores as Record<string, unknown>) ?? {},
+    },
+  });
+}
+
+/** Create or update the authenticated user's profile */
 export async function POST(request: Request) {
   try {
+    const session = await auth();
+    if (!session?.user?.id) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
     const body = await request.json();
     const data = profileSchema.parse(body);
 
-    const profile = await prisma.studentProfile.create({
-      data: {
-        name: data.name,
-        age: data.age,
-        gradeLevel: data.gradeLevel,
-        graduationYear: data.graduationYear,
-        gpa: data.gpa,
-        currentClasses: data.currentClasses,
-        intendedMajors: data.intendedMajors,
-        intendedIndustry: data.intendedIndustry,
-        targetColleges: data.targetColleges,
-        interests: data.interests,
-        extracurriculars: data.extracurriculars,
-        awards: data.awards,
-        leadershipExp: data.leadershipExp,
-        githubUrl: data.githubUrl || null,
-        portfolioUrl: data.portfolioUrl || null,
-        hoursPerWeek: data.hoursPerWeek,
-        constraints: data.constraints,
-        goals: data.goals,
-        testScores: data.testScores ?? undefined,
-      },
+    const existing = await prisma.studentProfile.findUnique({
+      where: { userId: session.user.id },
     });
+
+    const payload = {
+      name: data.name,
+      age: data.age,
+      gradeLevel: data.gradeLevel,
+      graduationYear: data.graduationYear,
+      gpa: data.gpa,
+      currentClasses: data.currentClasses,
+      intendedMajors: data.intendedMajors,
+      intendedIndustry: data.intendedIndustry,
+      targetColleges: data.targetColleges,
+      interests: data.interests,
+      extracurriculars: data.extracurriculars,
+      awards: data.awards,
+      leadershipExp: data.leadershipExp,
+      githubUrl: data.githubUrl || null,
+      portfolioUrl: data.portfolioUrl || null,
+      hoursPerWeek: data.hoursPerWeek,
+      constraints: data.constraints,
+      goals: data.goals,
+      testScores: data.testScores ?? undefined,
+    };
+
+    const profile = existing
+      ? await prisma.studentProfile.update({
+          where: { id: existing.id },
+          data: payload,
+        })
+      : await prisma.studentProfile.create({
+          data: {
+            ...payload,
+            userId: session.user.id,
+          },
+        });
 
     return NextResponse.json({ id: profile.id, profile });
   } catch (error) {
@@ -67,9 +129,9 @@ export async function POST(request: Request) {
         { status: 400 }
       );
     }
-    console.error("Profile creation error:", error);
+    console.error("Profile save error:", error);
     return NextResponse.json(
-      { error: "Failed to create profile" },
+      { error: "Failed to save profile" },
       { status: 500 }
     );
   }

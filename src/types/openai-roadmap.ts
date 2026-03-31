@@ -1,9 +1,10 @@
 /**
- * Strict TypeScript types for OpenAI roadmap response.
- * Matches the JSON schema requested from the model.
+ * Structured roadmap response schema.
+ * Strong, consistent format across the pipeline.
  */
 
 export type PriorityLevel = "High" | "Medium" | "Low";
+export type ImpactLevel = "High" | "Medium" | "Low";
 export type DifficultyLevel = "Beginner" | "Intermediate" | "Advanced";
 export type CompetitivenessClassification =
   | "Extreme Reach"
@@ -12,24 +13,38 @@ export type CompetitivenessClassification =
   | "Likely"
   | "Safety";
 
-export interface ExtracurricularRecommendation {
+/** Strategy top priority item */
+export interface StrategyTopPriority {
   title: string;
   reason: string;
-  priority: PriorityLevel;
+  impact: ImpactLevel;
 }
 
+/** Strategy section */
+export interface StrategySection {
+  summary: string;
+  topPriorities: StrategyTopPriority[];
+}
+
+/** Project idea */
 export interface ProjectIdea {
   title: string;
   description: string;
+  technologies: string[];
   timeEstimate: string;
   difficulty: DifficultyLevel;
+  whyItStandsOut: string;
 }
 
-export interface TimelinePeriod {
-  period: string;
-  actions: string[];
+/** Extracurricular recommendation */
+export interface ExtracurricularRecommendation {
+  title: string;
+  reason: string;
+  howToStandOut: string;
+  priority: PriorityLevel;
 }
 
+/** College competitiveness estimate */
 export interface CompetitivenessEstimate {
   collegeName: string;
   intendedMajor: string;
@@ -37,6 +52,20 @@ export interface CompetitivenessEstimate {
   probabilityBandLow: number;
   probabilityBandHigh: number;
   explanation: string;
+  biggestImprovementNeeded: string;
+}
+
+/** Essay idea */
+export interface EssayIdea {
+  theme: string;
+  storyOutline: string;
+  whatItReveals: string;
+  whyItIsCompelling: string;
+}
+
+export interface TimelinePeriod {
+  period: string;
+  actions: string[];
 }
 
 export interface ImprovementActionItem {
@@ -52,16 +81,17 @@ export interface ImprovementAction {
   actions: ImprovementActionItem[];
 }
 
+/** Canonical roadmap response */
 export interface OpenAIRoadmapResponse {
   studentSummary: string;
   strengths: string[];
   gaps: string[];
-  extracurricularRecommendations: ExtracurricularRecommendation[];
-  projectIdeas: ProjectIdea[];
-  courseworkSuggestions: string[];
-  competitionSuggestions: string[];
+  strategy: StrategySection;
+  projects: ProjectIdea[];
+  extracurriculars: ExtracurricularRecommendation[];
+  collegeChances: CompetitivenessEstimate[];
+  essayIdeas: EssayIdea[];
   timeline: TimelinePeriod[];
-  competitivenessEstimates: CompetitivenessEstimate[];
   improvementActions: ImprovementAction[];
   finalAdvice: string;
 }

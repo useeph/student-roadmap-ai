@@ -1,6 +1,9 @@
 import { NextResponse } from "next/server";
 import OpenAI from "openai";
+import { auth } from "@/auth";
 import { prisma } from "@/lib/db";
+import { profileBelongsToUser } from "@/lib/auth-helpers";
+import { buildChatSystemPrompt } from "@/lib/ai/build-chat-prompt";
 import type { StudentProfileInput } from "@/types";
 
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
@@ -57,6 +60,11 @@ function profileFromStudent(student: {
 
 export async function POST(request: Request) {
   try {
+    const session = await auth();
+    if (!session?.user?.id) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
     const body = await request.json();
     const studentId = typeof body?.studentId === "string" ? body.studentId : null;
     const messages = Array.isArray(body?.messages) ? body.messages : [];
@@ -67,6 +75,11 @@ export async function POST(request: Request) {
         { error: "studentId and message are required" },
         { status: 400 }
       );
+    }
+
+    const allowed = await profileBelongsToUser(studentId, session.user.id);
+    if (!allowed) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
 
     const student = await prisma.studentProfile.findUnique({
@@ -84,36 +97,12 @@ export async function POST(request: Request) {
     const profile = profileFromStudent(student);
     const roadmap = student.roadmap;
 
-    const contextParts: string[] = [
-      "## Student Profile",
-      `- Name: ${profile.name}`,
-      profile.gradeLevel ? `- Grade: ${profile.gradeLevel}` : "",
-      profile.graduationYear ? `- Graduation: ${profile.graduationYear}` : "",
-      profile.intendedMajors?.length ? `- Intended majors: ${profile.intendedMajors.join(", ")}` : "",
-      profile.targetColleges?.length ? `- Target colleges: ${profile.targetColleges.join(", ")}` : "",
-      profile.interests?.length ? `- Interests: ${profile.interests.join(", ")}` : "",
-      profile.extracurriculars?.length ? `- Extracurriculars: ${profile.extracurriculars.join(", ")}` : "",
-      profile.awards?.length ? `- Awards: ${profile.awards.join(", ")}` : "",
-      profile.goals ? `- Goals: ${profile.goals}` : "",
-    ].filter(Boolean);
-
-    if (roadmap) {
-      const roadmapParts = [
-        "",
-        "## Roadmap Summary",
-        roadmap.studentSummary ? `- Summary: ${roadmap.studentSummary}` : "",
-        roadmap.strengthsAnalysis ? `- Strengths: ${roadmap.strengthsAnalysis}` : "",
-        roadmap.gapsAnalysis ? `- Gaps: ${roadmap.gapsAnalysis}` : "",
-        roadmap.collegeCompetitiveness
-          ? `- College competitiveness: ${JSON.stringify(roadmap.collegeCompetitiveness)}`
-          : "",
-      ].filter(Boolean);
-      contextParts.push(...roadmapParts);
-    }
-
-    const systemContent = `You are an expert admissions strategist helping a student with their college application roadmap. Use the following context about the student and their roadmap to answer their questions. Be conversational, supportive, and specific. If you mention colleges, use their full or common names (e.g., MIT, Stanford).
-
-${contextParts.join("\n")}`;
+    const systemContent = buildChatSystemPrompt({
+      profile,
+      roadmap,
+      recentMessages: messages.slice(-10),
+      currentQuestion: userMessage,
+    });
 
     const client = createClient();
     if (!client) {
@@ -125,20 +114,28 @@ ${contextParts.join("\n")}`;
       );
     }
 
+    // Use messages as-is; last item is the current user message (client sends [...messages, userMsg])
     const chatMessages: Array<{ role: "system" | "user" | "assistant"; content: string }> = [
       { role: "system", content: systemContent },
-      ...messages.slice(-10).map((m: { role: string; content: string }) => ({
+      ...messages.slice(-12).map((m: { role: string; content: string }) => ({
         role: m.role as "user" | "assistant",
-        content: m.content,
+        content: String(m.content ?? ""),
       })),
-      { role: "user", content: userMessage },
     ];
+
+    // If the last message in the slice isn't the current user message, append it (backwards compat)
+    const lastMsg = chatMessages[chatMessages.length - 1];
+    if (lastMsg?.role !== "user" || lastMsg?.content !== userMessage) {
+      chatMessages.push({ role: "user", content: userMessage });
+    }
 
     const completion = await client.chat.completions.create({
       model: OPENAI_MODEL,
       messages: chatMessages,
-      temperature: 0.7,
+      temperature: 0.6,
       max_tokens: 800,
+      frequency_penalty: 0.3,
+      presence_penalty: 0.2,
     });
 
     const reply = completion.choices[0]?.message?.content?.trim() ?? "I couldn't generate a response. Please try again.";
